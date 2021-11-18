@@ -4,4 +4,5 @@ channels:
 dependencies:
   - pyzmq
   - pylint
+  - sphinx
 prefix: /home/dani/miniconda3/envs/sdle_p1
