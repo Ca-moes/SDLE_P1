@@ -3,8 +3,8 @@ import zmq, os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils
 
-to_deliver = { "TOPIC TOPIC": {'SUB1': []}
-             }
+# to_deliver = { "TOPIC TOPIC": {'SUB1': []}}
+to_deliver = {}
 to_confirm = {}
 messages = {}
 last_sub_id = -1
@@ -30,7 +30,6 @@ def handle_put(message:List):
         #Add message to deliver
         for subscriber in to_deliver[topic]:
             to_deliver[topic][subscriber].append(content)
-            # subscriber.append(content)
 
     print(f'handle_put: {messages}')
     return [message[0], b'', b"OK"]
@@ -41,19 +40,22 @@ def handle_get(message: List):
     # Mexe em estado interno
     # Cria mensagem
     # Retorna
-    pass
+    return [message[0], b'', b"Not Implemented"]
 
 def handle_sub(message: List):
     """message: [return address, "SUB", [Subscriber ID, Topic]]"""
-    sub_id = message[2][0]
+    sub_id = int(message[2][0])
     topic = message[2][1]
 
     if (sub_id == -1):
+        global last_sub_id  # https://docs.python.org/3/reference/executionmodel.html#naming-and-binding
+        last_sub_id += 1
+        sub_id = last_sub_id
         pass
-    # Mexe em estado interno
-    # Cria mensagem
-    # Retorna
-    pass
+
+    # ID is taken cared of, need to update internal data
+
+    return [message[0], b'', b"OK\r\n" + str(sub_id).encode('utf-8')]
 
 def handle_unsub(message: List):
     """message: [return address, "UNSUB", [Subscriber ID, Topic]]"""
@@ -61,7 +63,7 @@ def handle_unsub(message: List):
     # Mexe em estado interno
     # Cria mensagem
     # Retorna
-    pass
+    return [message[0], b'', b"Not Implemented"]
 
 def handle_cfm(message: List):
     """message: [return address, "CFM", [Subscriber ID, Message ID]]"""
@@ -69,7 +71,7 @@ def handle_cfm(message: List):
     # Mexe em estado interno
     # Cria mensagem
     # Retorna
-    pass
+    return [message[0], b'', b"Not Implemented"]
 
 def process_msg(message: List) -> List:
     """ Returns: [return address, message type, message elements] """
@@ -105,14 +107,12 @@ def main():
         if socks.get(socket) == zmq.POLLIN:
             message = socket.recv_multipart()  # https://zguide.zeromq.org/docs/chapter3/#The-Simple-Reply-Envelope
 
-            print(f'1: {message[0]}\n2: {message[1]}\n3: {message[2]}')
-            new_message = [message[0], b'', b'New Message']
+            print(f'Message Received in Proxy - 1: {message[0]}\n2: {message[1]}\n3: {message[2]}')
 
             parsed_msg = utils.parse_message(message)
-            new_message = process_msg(parsed_msg)
+            response = process_msg(parsed_msg)
 
-            socket.send_multipart(new_message)
-
+            socket.send_multipart(response)
 
 
 if __name__ == "__main__":

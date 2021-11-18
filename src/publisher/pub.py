@@ -4,7 +4,6 @@
 #   Sends "Hello" to server, expects "World" back
 #
 import zmq
-from zmq.backend import Frame
 
 def main():
     #  Prepare our context and sockets
