@@ -12,7 +12,7 @@ def main():
     socket.connect("tcp://localhost:5550")
 
     #  Do 10 requests, waiting each time for a response
-    for request in range(1, 11000):
+    for request in range(1, 100):
         socket.send(b"I'm a Sub socket")
         message = socket.recv()
         print(f"Received reply {request} [{message}]")
