@@ -1,7 +1,5 @@
-from typing import List, final
-import zmq, os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import utils
+from typing import List
+import zmq
 
 # to_deliver = { "TOPIC TOPIC": {'SUB1': []}}
 to_deliver = {}
