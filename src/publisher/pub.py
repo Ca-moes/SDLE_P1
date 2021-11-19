@@ -12,8 +12,9 @@ def main():
     socket.connect("tcp://localhost:5550")
 
     #  Do 10 requests, waiting each time for a response
-    for request in range(1, 10):
-        socket.send(b"PUT\r\nTOPIC TOPIC\r\nMESSAGE")
+    for request in range(1, 3):
+        message = f"Message {request}"
+        socket.send(b"PUT\r\nTOPIC TOPIC\r\n"+message.encode('utf-8'))
         message = socket.recv()
         print(f"Received reply {request} [{message}]")
 
