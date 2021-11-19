@@ -77,24 +77,35 @@ def handle_sub(message: List) -> bytes:
     else:
         print(f'Subscription of SUBID {sub_id} to topic {topic} already exists')
 
-    print(f'to_deliver: {to_deliver}')
+    print(f'to_deliver in sub = {to_deliver}')
     return b"OK\r\n" + str(sub_id).encode('utf-8')
 
 def handle_unsub(message: List):
-    """message: [return address, "UNSUB", [Subscriber ID, Topic]]"""
+    """message: ["UNSUB", Subscriber ID, Topic] """
+    sub_id = int(message[1])
+    topic = message[2]
 
-    # Mexe em estado interno
-    # Cria mensagem
-    # Retorna
-    return [message[0], b'', b"Not Implemented"]
+    if(to_deliver.get(topic) == None):
+        print(f'TO IMPLEMENT: Subscriber trying to UNSUB non-existing topic')
+        return b"OK"
+
+    if(to_deliver[topic].get(sub_id) == None):
+        print(f'TO IMPLEMENT: Subscriber trying to UNSUB a topic that it\'s not currently subbed')
+        return b"OK"
+
+    if(to_deliver[topic].pop(sub_id, None) == None):
+        raise Exception("Error in UNSUB")
+
+    print(f'to_deliver in unsub = {to_deliver}')
+    return b"OK"
 
 def handle_cfm(message: List):
-    """message: [return address, "CFM", [Subscriber ID, Message ID]]"""
+    """message: ["CFM", Subscriber ID, Message ID] """
 
     # Mexe em estado interno
     # Cria mensagem
     # Retorna
-    return [message[0], b'', b"Not Implemented"]
+    return b"Not Implemented"
 
 def process_msg(ret_address, message: List) -> List:
     message_type = message[0]
@@ -126,8 +137,6 @@ def main():
 
             if socks.get(socket) == zmq.POLLIN:
                 message = socket.recv_multipart()  # https://zguide.zeromq.org/docs/chapter3/#The-Simple-Reply-Envelope
-
-                print(f'Message Received in Proxy - 1: {message[0]}\n2: {message[1]}\n3: {message[2]}')
 
                 response = process_msg(message[0], message[2].decode("utf-8").split('\r\n'))
 

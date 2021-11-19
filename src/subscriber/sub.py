@@ -17,10 +17,14 @@ def main():
     sub_id = int(message.decode("utf-8").split('\r\n')[1])
 
     #  Do 10 requests, waiting each time for a response
-    for request in range(1, 14):
+    for request in range(1, 5):
         socket.send(b"SUB\r\n"+str(sub_id).encode('utf-8')+b"\r\nTOPIC TOPIC")
         message = socket.recv()
         print(f"Received reply {request} [{message}]")
+
+    socket.send(b"UNSUB\r\n"+str(sub_id).encode('utf-8')+b"\r\nTOPIC TOPIC")
+    message = socket.recv()
+    print(f'last reply: {message}')
 
 if __name__ == "__main__":
     main()
