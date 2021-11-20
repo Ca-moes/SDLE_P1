@@ -1,18 +1,25 @@
+from os import wait
 from typing import List
-import zmq, time
-
-from zmq.sugar import context
+import zmq, time, threading, pickle
 from utils import st, by
 
-to_deliver = {}  # { "TOPIC TOPIC": {'SUB1': []} }
-messages = {}  # { "TOPIC TOPIC": {counter: 1, 1: "message"} }
-waiting_get = {} # { "TOPIC TOPIC": [SUB1] }
+SAVE_INTERVAL = 5
+to_deliver = {} #  { "TOPIC TOPIC": {'SUB1': []} }
+messages =  {} #  { "TOPIC TOPIC": {'counter': 1, 1: "message"} }
+waiting_get = {} #  { "TOPIC TOPIC": ['SUB1'] }
 
-def print_global_vars(function_name: str):
+def print_global_vars(function_name: str) -> None:
     print(f"""{function_name}:
     - to_deliver: {to_deliver}
     - messages: {messages}
     - waiting_get: {waiting_get}""")
+
+def save_periodic():
+    while True:
+        print_global_vars('save_periodic')
+        with open('proxy.pickle', 'wb') as file:
+            pickle.dump((to_deliver, messages, waiting_get), file)
+        time.sleep(SAVE_INTERVAL)
 
 def handle_put(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     topic = message[1]
@@ -37,6 +44,10 @@ def handle_put(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     if (waiting_get.get(topic)):
         for node_id in waiting_get[topic]:
             socket.send_multipart([by(node_id), b'', by(content)])
+            waiting_get[topic].remove(node_id)
+        if waiting_get[topic] == []:
+            waiting_get.pop(topic)
+
 
 def handle_get(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     topic = message[1]
@@ -119,7 +130,15 @@ def process_msg(socket:zmq.Socket, message:List) -> None:
     }[message[0]](socket, node_id, message)
 
 
-def main():
+def main() -> None:
+    global to_deliver, messages, waiting_get
+    try:
+        with open('proxy.pickle', 'rb') as file:
+            print("Loading Proxy State")
+            to_deliver, messages, waiting_get = pickle.load(file)
+    except FileNotFoundError:
+        print("Didn't find a Proxy State, starting anew")
+
     # Prepare our context and sockets
     context = zmq.Context()
     socket = context.socket(zmq.ROUTER)
@@ -130,8 +149,13 @@ def main():
     poller = zmq.Poller()
     poller.register(socket, zmq.POLLIN)
 
+    # Thread to save state
+    saveThread = threading.Thread(target=save_periodic)
+    saveThread.daemon = True
+    saveThread.start()
+
+    # Poll messages
     try:
-        # Switch messages between sockets
         while True:
             socks = dict(poller.poll())
 
@@ -139,7 +163,7 @@ def main():
                 message = socket.recv_multipart()  # https://zguide.zeromq.org/docs/chapter3/#The-Simple-Reply-Envelope
                 process_msg(socket, message)
     except KeyboardInterrupt:
-        print("W: interrupt received, stopping...")
+        print(" W: interrupt received...")
     except Exception as e:
         print(f"{e}")
     finally:

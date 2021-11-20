@@ -51,8 +51,5 @@ def main(argv):
         put(socket, 'TOPIC TOPIC', "Test message")
 
 
-
-
-
 if __name__ == "__main__":
     main(sys.argv[1:])
