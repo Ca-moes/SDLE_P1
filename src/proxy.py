@@ -1,76 +1,68 @@
 from typing import List
 import zmq, time
-from utils import st
 
-# to_deliver = { "TOPIC TOPIC": {'SUB1': []}}
-to_deliver = {}
-messages = {}
-waiting_get = []
+from zmq.sugar import context
+from utils import st, by
+
+to_deliver = {}  # { "TOPIC TOPIC": {'SUB1': []} }
+messages = {}  # { "TOPIC TOPIC": {counter: 1, 1: "message"} }
+waiting_get = {} # { "TOPIC TOPIC": [SUB1] }
 
 def print_global_vars(function_name: str):
-    print(f'{function_name}:\n- to_deliver: {to_deliver}\n- messages: {messages}')
+    print(f"""{function_name}:
+    - to_deliver: {to_deliver}
+    - messages: {messages}
+    - waiting_get: {waiting_get}""")
 
-def handle_put(message:List) -> bytes:
-    # TODO ver se a mensagem tup que recebeu tem de ser mandada como resposta a algum get
+def handle_put(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     topic = message[1]
     content = message[2]
 
+    # if topic does not exist, simply drop message
     if(to_deliver.get(topic)):
-        #Add message to messages list
-        if(messages.get(topic)):
-            #increment counter
-            messages[topic]['counter'] += 1
-        else:
-            #set initial counter
-            messages[topic] = {}
-            messages[topic]['counter'] = 0
+        # If topic exists, that topic should exist in messages (added in SUB)
+        messages[topic]['counter'] += 1
 
         current_counter = messages[topic]['counter']
         messages[topic][current_counter] = content
 
-        #Add message counter to to_deliver
+        # Add message counter to to_deliver
         for subscriber in to_deliver[topic]:
             to_deliver[topic][subscriber].append(current_counter)
 
     print_global_vars('handle_put')
-    return b"OK"
+    socket.send_multipart([node_id, b'', b'OK'])
 
-def handle_get(message: List) -> bytes:
-    """Handler for the GET message
+    # Send message to Subs blocked in GET
+    if (waiting_get.get(topic)):
+        for node_id in waiting_get[topic]:
+            socket.send_multipart([by(node_id), b'', by(content)])
 
-    Args:
-        message (List): ["GET", Subscriber ID, Topic]
-
-    Returns:
-        bytes: return message
-    """
-    print("IN GET HANDLER")
-    sub_id = int(message[1])
-    topic = message[2]
-
+def handle_get(socket:zmq.Socket, node_id:bytes, message: List) -> None:
+    topic = message[1]
+    node_id_str = st(node_id)
     # Check if topic exists
-    if(to_deliver.get(topic) == None):
+    if not (to_deliver.get(topic)):
         print(f'TO IMPLEMENT: Subscriber trying to GET from a non-existing topic')
         return b"TO BE IMPLEMENTED - NON EXISTENT TOPIC"
 
     # Check if Subscriber is SUBBED
-    if(to_deliver[topic].get(sub_id) == None):
+    if(to_deliver[topic].get(node_id_str) == None):
         print(f'TO IMPLEMENT: Subscriber trying to GET from a topic to which it is not SUBBED')
         return b"TO BE IMPLEMENTED - NOT SUBBED"
 
-    # Check if SUB has messages in Topic
-    if not (to_deliver[topic][sub_id]):
-        print(f'TO IMPLEMENT: Subscriber trying to GET from a SUBBED Topic without messages')
-        return b"TO BE IMPLEMENTED - BLOCK IF NO MESSAGES"
+    # If SUB does not have messages to send, add to waiting list
+    if (to_deliver[topic][node_id_str] == []):
+        if topic not in waiting_get:
+            waiting_get[topic] = []
+        waiting_get[topic].append(node_id_str)
+    # If SUB has messages to send, send them
+    else:
+        message_counter = to_deliver[topic][node_id_str].pop(0)
+        message = messages[topic][message_counter]
 
-    message_counter = to_deliver[topic][sub_id].pop(0)
-    message = messages[topic][message_counter]
-
-    print("sleeping to let sub crash")
-    time.sleep(5)
-
-    print_global_vars('handle_get')
-    return b"MSG\r\n" + str(message_counter).encode('utf-8') + b"\r\n"+ message.encode('utf-8')
+        print_global_vars('handle_get')
+        socket.send_multipart([node_id, b'', by(message)])
 
 def handle_sub(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     topic = message[1]

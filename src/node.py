@@ -7,7 +7,7 @@ import zmq, time, sys
 from utils import by
 
 def put(socket:zmq.Socket, topic:str, message:str) -> None:
-    socket.send(b"PUT\r\n"+by(topic)+"\r\n"+by(message))
+    socket.send(b"PUT\r\n"+by(topic)+b"\r\n"+by(message))
     message = socket.recv()
     print(f"PUT reply: {message}")
 
@@ -23,6 +23,7 @@ def unsub(socket:zmq.Socket, topic:str) -> None:
 
 def get(socket:zmq.Socket, topic:str) -> None:
     socket.send(b"GET\r\n"+by(topic))
+    print(f'Sent GET of topic {topic}')
     message = socket.recv()
     print(f"PUT reply: {message}")
 
@@ -34,14 +35,23 @@ def main(argv):
     socket.setsockopt_string(zmq.IDENTITY, identity)
     socket.connect("tcp://localhost:5550")
 
-    # Send/Receive messages
-    sub(socket, 'TOPIC TOPIC')
-    unsub(socket, 'TOPIC TOPIC')
 
-    # # To send a PUT
-    # time.sleep(5)
+    if identity == 'SUB1':
+        # Send/Receive messages
+        sub(socket, 'TOPIC TOPIC')
 
-    # get('TOPIC TOPIC')
+        # To send a PUT
+        # print("Imma sleep for 5 secs")
+        # time.sleep(5)
+
+        get(socket, 'TOPIC TOPIC')
+        unsub(socket, 'TOPIC TOPIC')
+
+    if identity == 'PUB1':
+        put(socket, 'TOPIC TOPIC', "Test message")
+
+
+
 
 
 if __name__ == "__main__":
