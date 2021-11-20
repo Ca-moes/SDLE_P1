@@ -16,10 +16,19 @@ def print_global_vars(function_name: str) -> None:
 
 def save_periodic():
     while True:
-        print_global_vars('save_periodic')
+        # print_global_vars('save_periodic')
         with open('proxy.pickle', 'wb') as file:
             pickle.dump((to_deliver, messages, waiting_get), file)
         time.sleep(SAVE_INTERVAL)
+
+def clean_messages(topic:str, message_counter: int):
+    can_delete_message = True
+    for _, to_be_delivered in to_deliver[topic].items():
+        if message_counter in to_be_delivered:
+            can_delete_message = False
+            break
+    if can_delete_message:
+        messages[topic].pop(message_counter)
 
 def handle_put(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     topic = message[1]
@@ -37,30 +46,38 @@ def handle_put(socket:zmq.Socket, node_id:bytes, message: List) -> None:
         for subscriber in to_deliver[topic]:
             to_deliver[topic][subscriber].append(current_counter)
 
-    print_global_vars('handle_put')
     socket.send_multipart([node_id, b'', b'OK'])
 
     # Send message to Subs blocked in GET
     if (waiting_get.get(topic)):
         for node_id in waiting_get[topic]:
-            socket.send_multipart([by(node_id), b'', by(content)])
             waiting_get[topic].remove(node_id)
+            try:
+                socket.send_multipart([by(node_id), b'', by(content)])
+            except Exception as e:
+                print(f'{e} - Message still queued to send')
+            else:
+                message_counter = to_deliver[topic][node_id].pop(0)
+                message = messages[topic][message_counter]
+                clean_messages(topic, message_counter)
+
         if waiting_get[topic] == []:
             waiting_get.pop(topic)
 
+    print_global_vars('handle_put')
 
 def handle_get(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     topic = message[1]
     node_id_str = st(node_id)
     # Check if topic exists
     if not (to_deliver.get(topic)):
-        print(f'TO IMPLEMENT: Subscriber trying to GET from a non-existing topic')
-        return b"TO BE IMPLEMENTED - NON EXISTENT TOPIC"
+        socket.send_multipart([node_id, b'', b"Topic does not exist. Send SUB first"])
+        return
 
     # Check if Subscriber is SUBBED
     if(to_deliver[topic].get(node_id_str) == None):
-        print(f'TO IMPLEMENT: Subscriber trying to GET from a topic to which it is not SUBBED')
-        return b"TO BE IMPLEMENTED - NOT SUBBED"
+        socket.send_multipart([node_id, b'', b"You are not subbed to this Topic. Send SUB first"])
+        return
 
     # If SUB does not have messages to send, add to waiting list
     if (to_deliver[topic][node_id_str] == []):
@@ -71,7 +88,7 @@ def handle_get(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     else:
         message_counter = to_deliver[topic][node_id_str].pop(0)
         message = messages[topic][message_counter]
-
+        clean_messages(topic, message_counter)
         print_global_vars('handle_get')
         socket.send_multipart([node_id, b'', by(message)])
 
@@ -116,7 +133,7 @@ def handle_unsub(socket:zmq.Socket, node_id:bytes, message: List) -> None:
         to_deliver.pop(topic)
         messages.pop(topic)
 
-    print_global_vars('handle_sub')
+    print_global_vars('handle_unsub')
     socket.send_multipart([node_id, b'', b'OK'])
 
 def process_msg(socket:zmq.Socket, message:List) -> None:
@@ -128,7 +145,6 @@ def process_msg(socket:zmq.Socket, message:List) -> None:
         'SUB': handle_sub,
         'UNSUB': handle_unsub,
     }[message[0]](socket, node_id, message)
-
 
 def main() -> None:
     global to_deliver, messages, waiting_get
@@ -160,12 +176,12 @@ def main() -> None:
             socks = dict(poller.poll())
 
             if socks.get(socket) == zmq.POLLIN:
-                message = socket.recv_multipart()  # https://zguide.zeromq.org/docs/chapter3/#The-Simple-Reply-Envelope
+                message = socket.recv_multipart()
                 process_msg(socket, message)
     except KeyboardInterrupt:
         print(" W: interrupt received...")
     except Exception as e:
-        print(f"{e}")
+        print(f"{e} in main()")
     finally:
         socket.close()
         context.term()
