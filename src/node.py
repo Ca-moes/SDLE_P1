@@ -1,10 +1,13 @@
-""" Node program """
+"""
+.. module:: node
+   :synopsis: Node program that can be a Publisher or a Subscriber
+"""
 from typing import List
 
 import time
 import sys
 import zmq
-from utils import by
+from src.utils import by
 
 def put(socket:zmq.Socket, data:List) -> None:
     """Sends a PUT message

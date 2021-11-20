@@ -1,10 +1,13 @@
-""" Proxy program """
+"""
+.. module:: proxy
+   :synopsis: Proxy program to receive Messages and Send them out
+"""
 from typing import List
 import time
 import threading
 import pickle
 import zmq
-from utils import st, by
+from src.utils import st, by
 
 
 SAVE_INTERVAL = 5
