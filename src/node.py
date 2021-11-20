@@ -7,7 +7,7 @@ from typing import List
 import time
 import sys
 import zmq
-from src.utils import by
+from utils import by
 
 def put(socket:zmq.Socket, data:List) -> None:
     """Sends a PUT message

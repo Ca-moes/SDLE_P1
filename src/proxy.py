@@ -7,7 +7,7 @@ import time
 import threading
 import pickle
 import zmq
-from src.utils import st, by
+from utils import st, by
 
 
 SAVE_INTERVAL = 5
