@@ -7,6 +7,7 @@ import time
 import threading
 import pickle
 import zmq
+from zmq.sugar import socket
 from utils import st, by
 
 
@@ -118,6 +119,7 @@ def handle_get(socket:zmq.Socket, node_id:bytes, message: List) -> None:
         if topic not in WAITING_GET:
             WAITING_GET[topic] = []
         WAITING_GET[topic].append(node_id_str)
+        print_global_vars('handle_get - waiting get')
     # If SUB has MESSAGES to send, send them
     else:
         message_counter = TO_DELIVER[topic][node_id_str].pop(0)
@@ -130,7 +132,7 @@ def handle_get(socket:zmq.Socket, node_id:bytes, message: List) -> None:
         else:
             clean_messages(topic, message_counter)
         finally:
-            print_global_vars('handle_get')
+            print_global_vars('handle_get - sent message')
 
 def handle_sub(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     """Handler function for sub message
@@ -193,6 +195,16 @@ def handle_unsub(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     print_global_vars('handle_unsub')
     socket.send_multipart([node_id, b'', b'OK'])
 
+def handle_hello(socket:zmq.Socket, node_id:bytes, message: List) -> None:
+    # Verify if node_id is in WAITING_GET and remove it
+    for topic, nodes in WAITING_GET.items():
+        if st(node_id) in nodes:
+            WAITING_GET[topic].remove(st(node_id))
+
+    print_global_vars('handle_hello')
+    socket.send_multipart([node_id, b'', b'HI'])
+
+
 def process_msg(socket:zmq.Socket, message:List) -> None:
     """Receives a message and sends it to the proper handler
 
@@ -207,6 +219,7 @@ def process_msg(socket:zmq.Socket, message:List) -> None:
         'GET': handle_get,
         'SUB': handle_sub,
         'UNSUB': handle_unsub,
+        'HELLO': handle_hello
     }[message[0]](socket, node_id, message)
 
 def main() -> None:

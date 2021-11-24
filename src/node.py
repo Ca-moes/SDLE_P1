@@ -58,6 +58,11 @@ def get(socket:zmq.Socket, data:List) -> None:
     message = socket.recv()
     print(f"GET reply: {message}")
 
+def hello(socket:zmq.Socket) -> None:
+    socket.send(b'HELLO')
+    message = socket.recv()
+    print(f"HELLO reply: {message}")
+
 def main(argv: List):
     """Main function
 
@@ -71,6 +76,10 @@ def main(argv: List):
     socket = context.socket(zmq.REQ)
     socket.setsockopt_string(zmq.IDENTITY, identity)
     socket.connect("tcp://localhost:5550")
+
+    # In case the subscriber was crashed while waiting for get
+    # To signal it's not waiting anymore
+    hello(socket)
 
     if len(argv) > 1 and argv[1] == 'dev':
         try:
@@ -96,7 +105,9 @@ def main(argv: List):
             unsub(socket, ['TOPIC TOPIC'])
 
         if identity == 'PUB1':
-            put(socket, ['TOPIC TOPIC', "Test message"])
+            while True:
+                put(socket ,['TOPIC', "Test message"])
+                time.sleep(1)
 
 
 if __name__ == "__main__":
