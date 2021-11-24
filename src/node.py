@@ -75,17 +75,16 @@ def main(argv: List):
     if len(argv) > 1 and argv[1] == 'dev':
         try:
             while True:
-                command = input("Write a message\nSUB <TOPIC>\nUNSUB <TOPIC>\nGET <TOPIC>\n \
-                PUT <TOPIC> <MESSAGE>\n: ")
+                command = input("Write a message\nSUB <TOPIC>\nUNSUB <TOPIC>\nGET <TOPIC>\nPUT <TOPIC> <MESSAGE>\n: ")
                 command = command.split(' ')
                 {
                     'SUB': sub,
                     'UNSUB': unsub,
                     'GET': get,
                     'PUT': put
-                }[command[0]](socket, command[1:])
+                }[command[0].upper()](socket, command[1:])
         except KeyboardInterrupt:
-            print("Bye")
+            print("\nBye")
     else:
         # Test messages as manifests
         if identity == 'SUB1':

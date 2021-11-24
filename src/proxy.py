@@ -122,9 +122,15 @@ def handle_get(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     else:
         message_counter = TO_DELIVER[topic][node_id_str].pop(0)
         message = MESSAGES[topic][message_counter]
-        clean_messages(topic, message_counter)
-        print_global_vars('handle_get')
-        socket.send_multipart([node_id, b'', by(message)])
+        try:
+            socket.send_multipart([node_id, b'', by(message)])
+        except zmq.ZMQBaseError:
+            print("ZMQ Error - Probably Host Unreachable\nSaving message to send latter")
+            TO_DELIVER[topic][node_id_str].append(message_counter)
+        else:
+            clean_messages(topic, message_counter)
+        finally:
+            print_global_vars('handle_get')
 
 def handle_sub(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     """Handler function for sub message
@@ -166,12 +172,12 @@ def handle_unsub(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     node_id_str = st(node_id)
 
     if not TO_DELIVER.get(topic):
-        print('TO IMPLEMENT: Subscriber trying to UNSUB non-existing topic')
+        print('Subscriber trying to UNSUB non-existing topic')
         socket.send_multipart([node_id, b'', b'ERROR'])
 
     # these 2 if's need to be done with == None insted of if not because [] == False but [] != None
     if TO_DELIVER[topic].get(node_id_str) is None:
-        print('TO IMPLEMENT: Subscriber trying to UNSUB a topic that it\'s not currently subbed')
+        print('Subscriber trying to UNSUB a topic that it\'s not currently subbed')
         socket.send_multipart([node_id, b'', b'ERROR'])
 
     if TO_DELIVER[topic].pop(node_id_str, None) is None:
@@ -239,8 +245,6 @@ def main() -> None:
                 process_msg(socket, message)
     except KeyboardInterrupt:
         print(" W: interrupt received...")
-    except Exception as exception:
-        print(f"{exception} in main()")
     finally:
         socket.close()
         context.term()
