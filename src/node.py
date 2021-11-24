@@ -59,6 +59,11 @@ def get(socket:zmq.Socket, data:List) -> None:
     print(f"GET reply: {message}")
 
 def hello(socket:zmq.Socket) -> None:
+    """Sends a Hello
+
+    Args:
+        socket (zmq.Socket): Socket to send Hello message through
+    """
     socket.send(b'HELLO')
     message = socket.recv()
     print(f"HELLO reply: {message}")

@@ -196,10 +196,22 @@ def handle_unsub(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     socket.send_multipart([node_id, b'', b'OK'])
 
 def handle_hello(socket:zmq.Socket, node_id:bytes, message: List) -> None:
+    """Handler for the Hello message
+
+    Args:
+        socket (zmq.Socket): Socket to send response back
+        node_id (bytes): Node identifier to send message back
+        message (List): Received message (HELLO)
+    """
+    topics_to_remove = []
     # Verify if node_id is in WAITING_GET and remove it
     for topic, nodes in WAITING_GET.items():
         if st(node_id) in nodes:
             WAITING_GET[topic].remove(st(node_id))
+            topics_to_remove.append(topic)
+    for topic in topics_to_remove:
+        if WAITING_GET[topic] == []:
+            WAITING_GET.pop(topic)
 
     print_global_vars('handle_hello')
     socket.send_multipart([node_id, b'', b'HI'])
