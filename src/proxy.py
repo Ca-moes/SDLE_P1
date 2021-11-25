@@ -3,11 +3,8 @@
    :synopsis: Proxy program to receive Messages and Send them out
 """
 from typing import List
-import time
-import threading
 import pickle
 import zmq
-from zmq.sugar import socket
 from utils import st, by
 
 
@@ -30,11 +27,22 @@ def print_global_vars(function_name: str) -> None:
 def save_periodic():
     """Function to be run in a separate thread to periodically save the proxy internal state.
     """
-    while True:
-        # print_global_vars('save_periodic')
-        with open('proxy.pickle', 'wb') as file:
-            pickle.dump((TO_DELIVER, MESSAGES, WAITING_GET), file)
-        time.sleep(SAVE_INTERVAL)
+    with open('proxy.pickle', 'wb') as file:
+        pickle.dump((TO_DELIVER, MESSAGES, WAITING_GET), file)
+
+def safe_send(socket:zmq.Socket, node_id:bytes, message:str) -> None:
+    """Tries to send a message do node_id, it the host is unreachable, simply drops the message
+    and does not crash
+
+    Args:
+        socket (zmq.Socket): Socket to send reply through
+        node_id (bytes): Node identifier
+        message (str): message to send
+    """
+    try:
+        socket.send_multipart([node_id, b'', by(message)])
+    except zmq.ZMQBaseError:
+        print(f"ZMQ Error - Probably Host Unreachable\nHost disconnected, dropping [{message}] message")
 
 def clean_messages(topic:str, message_counter:int) -> None:
     """Removes messages from MESSAGES if they are not going to be delivered anymore
@@ -74,7 +82,7 @@ def handle_put(socket:zmq.Socket, node_id:bytes, message: List) -> None:
         for subscriber in TO_DELIVER[topic]:
             TO_DELIVER[topic][subscriber].append(current_counter)
 
-    socket.send_multipart([node_id, b'', b'OK'])
+    safe_send(socket, node_id, 'OK')
 
     # Send message to Subs blocked in GET
     if WAITING_GET.get(topic):
@@ -82,8 +90,8 @@ def handle_put(socket:zmq.Socket, node_id:bytes, message: List) -> None:
             WAITING_GET[topic].remove(node)
             try:
                 socket.send_multipart([by(node), b'', by(content)])
-            except Exception as exception:
-                print(f'{exception} - Message still queued to send')
+            except zmq.ZMQBaseError:
+                print('Host Unreachable - Message still queued to send')
             else:
                 message_counter = TO_DELIVER[topic][node].pop(0)
                 message = MESSAGES[topic][message_counter]
@@ -106,12 +114,12 @@ def handle_get(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     node_id_str = st(node_id)
     # Check if topic exists
     if not TO_DELIVER.get(topic):
-        socket.send_multipart([node_id, b'', b"Topic does not exist. Send SUB first"])
+        safe_send(socket, node_id, "Topic does not exist. Send SUB first")
         return
 
     # Check if Subscriber is SUBBED
     if TO_DELIVER[topic].get(node_id_str) is None:
-        socket.send_multipart([node_id, b'', b"You are not subbed to this Topic. Send SUB first"])
+        safe_send(socket, node_id, "You are not subbed to this Topic. Send SUB first")
         return
 
     # If SUB does not have MESSAGES to send, add to waiting list
@@ -157,7 +165,7 @@ def handle_sub(socket:zmq.Socket, node_id:bytes, message: List) -> None:
         print(f'Subscription of NODEID {node_id_str} to topic {topic} already exists')
 
     print_global_vars('handle_sub')
-    socket.send_multipart([node_id, b'', b'OK'])
+    safe_send(socket, node_id, 'OK')
 
 def handle_unsub(socket:zmq.Socket, node_id:bytes, message: List) -> None:
     """Handler for UNSUB message
@@ -175,12 +183,12 @@ def handle_unsub(socket:zmq.Socket, node_id:bytes, message: List) -> None:
 
     if not TO_DELIVER.get(topic):
         print('Subscriber trying to UNSUB non-existing topic')
-        socket.send_multipart([node_id, b'', b'ERROR'])
+        safe_send(socket, node_id, 'ERROR')
 
     # these 2 if's need to be done with == None insted of if not because [] == False but [] != None
     if TO_DELIVER[topic].get(node_id_str) is None:
         print('Subscriber trying to UNSUB a topic that it\'s not currently subbed')
-        socket.send_multipart([node_id, b'', b'ERROR'])
+        safe_send(socket, node_id, 'ERROR')
 
     if TO_DELIVER[topic].pop(node_id_str, None) is None:
         print(f'TO_DELIVER after pop: {TO_DELIVER}')
@@ -188,14 +196,13 @@ def handle_unsub(socket:zmq.Socket, node_id:bytes, message: List) -> None:
 
     # Remove topic from MESSAGES and TO_DELIVER if is the last to unsub from that topic
     if len(TO_DELIVER[topic]) == 0:
-        #TODO Encapsulate in try..catch or raise Exception if there's an error in pop
         TO_DELIVER.pop(topic)
         MESSAGES.pop(topic)
 
     print_global_vars('handle_unsub')
-    socket.send_multipart([node_id, b'', b'OK'])
+    safe_send(socket, node_id, 'OK')
 
-def handle_hello(socket:zmq.Socket, node_id:bytes, message: List) -> None:
+def handle_hello(socket:zmq.Socket, node_id:bytes, _) -> None:
     """Handler for the Hello message
 
     Args:
@@ -214,8 +221,7 @@ def handle_hello(socket:zmq.Socket, node_id:bytes, message: List) -> None:
             WAITING_GET.pop(topic)
 
     print_global_vars('handle_hello')
-    socket.send_multipart([node_id, b'', b'HI'])
-
+    safe_send(socket, node_id, 'HI')
 
 def process_msg(socket:zmq.Socket, message:List) -> None:
     """Receives a message and sends it to the proper handler
@@ -255,11 +261,6 @@ def main() -> None:
     poller = zmq.Poller()
     poller.register(socket, zmq.POLLIN)
 
-    # Thread to save state
-    save_thread = threading.Thread(target=save_periodic)
-    save_thread.daemon = True
-    save_thread.start()
-
     # Poll MESSAGES
     try:
         while True:
@@ -268,6 +269,8 @@ def main() -> None:
             if socks.get(socket) == zmq.POLLIN:
                 message = socket.recv_multipart()
                 process_msg(socket, message)
+                save_periodic()
+
     except KeyboardInterrupt:
         print(" W: interrupt received...")
     finally:

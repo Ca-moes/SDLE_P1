@@ -18,6 +18,7 @@ def put(socket:zmq.Socket, data:List) -> None:
     """
     topic, message = data[0], data[1]
     socket.send(b"PUT\r\n"+by(topic)+b"\r\n"+by(message))
+
     message = socket.recv()
     print(f"PUT reply: {message}")
 
@@ -75,7 +76,7 @@ def main(argv: List):
         argv (List): [Node_Identity, (dev)]
     """
     identity = argv[0]
-    print(f'Staring node with identity {identity}')
+    print(f'Starting node with identity {identity}')
     #  Prepare our context and sockets
     context = zmq.Context()
     socket = context.socket(zmq.REQ)
@@ -99,6 +100,8 @@ def main(argv: List):
                 }[command[0].upper()](socket, command[1:])
         except KeyboardInterrupt:
             print("\nBye")
+            socket.close()
+            context.term()
     else:
         # Test messages as manifests
         if identity == 'SUB1':
