@@ -94,7 +94,6 @@ def handle_put(socket:zmq.Socket, node_id:bytes, message: List) -> None:
                 print('Host Unreachable - Message still queued to send')
             else:
                 message_counter = TO_DELIVER[topic][node].pop(0)
-                message = MESSAGES[topic][message_counter]
                 clean_messages(topic, message_counter)
 
         if WAITING_GET[topic] == []:
