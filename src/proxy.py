@@ -247,6 +247,7 @@ def main() -> None:
         with open('proxy.pickle', 'rb') as file:
             print("Loading Proxy State")
             TO_DELIVER, MESSAGES, WAITING_GET = pickle.load(file)
+            print_global_vars('main')
     except FileNotFoundError:
         print("Didn't find a Proxy State, starting anew")
 

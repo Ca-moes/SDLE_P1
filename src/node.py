@@ -104,18 +104,18 @@ def main(argv: List):
             context.term()
     else:
         # Test messages as manifests
-        if identity == 'SUB1':
-            sub(socket, ['TOPIC TOPIC'])
+        if identity == 'SUB11':
+            sub(socket, ['TOPIC'])
             # To send a PUT
-            print("Imma sleep for 5 secs")
-            time.sleep(5)
-            get(socket, ['TOPIC TOPIC'])
-            unsub(socket, ['TOPIC TOPIC'])
+            print("I'll sleep for 5 secs")
+            time.sleep(10)
+            get(socket, ['TOPIC'])
 
-        if identity == 'PUB1':
-            while True:
-                put(socket ,['TOPIC', "Test message"])
-                time.sleep(1)
+
+        if identity == 'PUB11':
+            put(socket, ['TOPIC', 'msg1'])
+            put(socket, ['TOPIC', 'msg2'])
+            put(socket, ['TOPIC', 'msg3'])
 
 
 if __name__ == "__main__":
